@@ -1,0 +1,161 @@
+---
+title: "PML Week 3 Project"
+output:
+  html_document:
+    toc: true
+    theme: united
+---
+
+
+
+
+PML Week 3 Project
+============================================
+
+Objective
+---------------------------------------------
+A group of enthusiasts take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. The data provided is collected from from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who had performed barbell lifts correctly and incorrectly in 5 different ways. 
+
+The goal of this project is to predict the manner in which they did the exercise by using "classe" variable in the training set. Below shows the steps of building the prediction model, cross validation and expected out of sample error which will then later be used to predict 20 different test cases.
+
+
+Data Preparation
+---------------------------------------------
+
+```{r, eval=FALSE}
+trgdata <- read.csv("pml-training.csv")
+summary(trgdata$classe)
+```
+
+To start off, there are a total of 19622 records with 160 variables. As there are many variables, I will filter those not so useful columns and exclude them in the data set thus keeping only 53 columns left
+
+* Columns about username/timestamp which are not the actual measurement data (7)
+* Columns with mostly NA values (60) 
+* Columns with zero variance (86)
+
+```{r, eval=FALSE}
+trgdata <- subset(trgdata,,c(8:160))
+feature_index <- colnames(trgdata[colSums(is.na(trgdata)) == 0])
+trgdata <- subset(trgdata,,feature_index)
+myzerovar <- nearZeroVar(trgdata, saveMetrics = TRUE)
+trgdata <- trgdata[ , myzerovar$nzv==FALSE] 
+
+```
+
+I proceed to split the training set into training and validation set using Classe variable
+
+```{r, eval=FALSE}
+library(caret)
+inTrain <- createDataPartition(trgdata$classe, p=0.8, list=FALSE)
+training <- trgdata[inTrain,]
+testing <- trgdata[-inTrain,]
+
+```
+
+Model Building
+---------------------------------------------
+As there are many predictors, I use random forest to split the variables into groups and the error rate is low. Note that this model takes a while to generate. We then proceed to cross validate with our split test data. 
+
+
+```{r, eval=FALSE}
+modFit <- randomForest(classe~., data=training, importance=TRUE)
+modFit
+```
+
+```
+Call:
+ randomForest(formula = classe ~ ., data = training, importance = TRUE) 
+               Type of random forest: classification
+                     Number of trees: 500
+No. of variables tried at each split: 7
+
+        OOB estimate of  error rate: 0.41%
+Confusion matrix:
+     A    B    C    D    E  class.error
+A 4460    4    0    0    0 0.0008960573
+B   10 3025    3    0    0 0.0042791310
+C    0   11 2725    2    0 0.0047479912
+D    0    0   26 2545    2 0.0108822386
+E    0    0    0    6 2880 0.0020790021
+```
+
+Model Evaluation
+---------------------------------------------
+
+
+```{r, eval=FALSE}
+predictRF <- predict(modFit,testing)
+confusionMatrixTest <- confusionMatrix(predictRF,testing$classe)
+confusionMatrixTest
+sum(diag(confusionMatrixTest$table))/sum(confusionMatrixTest$table)
+```
+
+```
+Confusion Matrix and Statistics
+
+          Reference
+Prediction    A    B    C    D    E
+         A 1115    4    0    0    0
+         B    0  755    3    0    0
+         C    1    0  681    3    0
+         D    0    0    0  639    0
+         E    0    0    0    1  721
+
+Overall Statistics
+                                          
+               Accuracy : 0.9969          
+                 95% CI : (0.9947, 0.9984)
+    No Information Rate : 0.2845          
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.9961          
+ Mcnemar's Test P-Value : NA              
+
+Statistics by Class:
+
+                     Class: A Class: B Class: C Class: D Class: E
+Sensitivity            0.9991   0.9947   0.9956   0.9938   1.0000
+Specificity            0.9986   0.9991   0.9988   1.0000   0.9997
+Pos Pred Value         0.9964   0.9960   0.9942   1.0000   0.9986
+Neg Pred Value         0.9996   0.9987   0.9991   0.9988   1.0000
+Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
+Detection Rate         0.2842   0.1925   0.1736   0.1629   0.1838
+Detection Prevalence   0.2852   0.1932   0.1746   0.1629   0.1840
+Balanced Accuracy      0.9988   0.9969   0.9972   0.9969   0.9998
+
+
+> sum(diag(confusionMatrixTest$table))/sum(confusionMatrixTest$table)
+[1] 0.9969411
+```
+
+The Confusion Matrix to predict the cross validated data set being achieved is 99.69% accuracy. Here, the Out-Of-Sample Error Rate observed is 0.31% (1-0.9969).
+
+With that, we can safely use this model to predict the actual testing set of 20 test cases.
+
+
+Model Prediction
+---------------------------------------------
+```
+testdata <- read.csv("pml-testing.csv")
+predictRF_final <- predict(modFit,testdata)
+predictRF_final
+
+> predictRF_final
+ 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
+ B  A  B  A  A  E  D  B  A  A  B  C  B  A  E  E  A  B  B  B 
+Levels: A B C D E
+
+answers <- predictRF_final
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+```
+
+
